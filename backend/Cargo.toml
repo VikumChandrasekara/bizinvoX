@@ -1,0 +1,64 @@
+[package]
+name = "big-api"
+version = "0.1.0"
+edition = "2021"
+description = "bizinvoX.com - REST API"
+publish = false
+
+[dependencies]
+anyhow = "1"
+argon2 = { version = "0.5", features = ["std"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
+axum-extra = { version = "0.9", features = ["cookie"] }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+hex = "0.4"
+hmac = "0.12"
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "webp"] }
+jsonwebtoken = "9"
+printpdf = { version = "0.7", features = ["embedded_images"] }
+rand = "0.8"
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager", "script"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rust_decimal = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "json",
+    "rust_decimal",
+    "migrate",
+    "macros",
+    "derive",
+] }
+subtle = "2"
+time = "0.3"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = [
+    "cors",
+    "compression-full",
+    "trace",
+    "limit",
+    "timeout",
+    "request-id",
+    "util",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+utoipa = { version = "4", features = ["axum_extras", "uuid", "chrono", "decimal"] }
+utoipa-swagger-ui = { version = "7", features = ["axum", "reqwest"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+validator = { version = "0.18", features = ["derive"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = 3

@@ -1,0 +1,62 @@
+# Local full stack: Postgres + Redis + Rust API + Next.js web.
+#   docker compose up --build
+# Web: http://localhost:3000   API docs: http://localhost:8080/docs
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: big
+      POSTGRES_PASSWORD: big
+      POSTGRES_DB: big
+    # Not published by default (avoids clashing with a local Postgres).
+    # Uncomment to connect from the host:  ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U big -d big"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    # Not published to the host by default (internal network only).
+    # Uncomment to inspect locally:  ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgres://big:big@postgres:5432/big
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-local-dev-only-jwt-secret-change-me-0123456789}
+      TOKEN_SECRET: ${TOKEN_SECRET:-local-dev-only-token-secret-change-me-0123456789}
+      APP_ORIGIN: http://localhost:3000
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "true"
+      ENABLE_API_DOCS: "true"
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY:-}
+      STRIPE_PRICE_PRO_ANNUAL: ${STRIPE_PRICE_PRO_ANNUAL:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RUST_LOG: big_api=debug,tower_http=info
+    ports: ["8080:8080"]
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        API_ORIGIN: http://api:8080   # baked into the proxy rewrites at build time
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:

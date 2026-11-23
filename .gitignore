@@ -1,0 +1,36 @@
+# Rust
+backend/target/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+*.tsbuildinfo
+
+frontend/coverage/
+frontend/.vercel/
+frontend/.turbo/
+npm-debug.log*
+
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local tooling / AI assistant state
+.claude/
+.playwright-mcp/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+
+# Local compose overrides
+docker-compose.override.yml
