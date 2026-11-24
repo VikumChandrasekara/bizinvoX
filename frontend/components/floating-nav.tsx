@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDown, Crown, LogOut, Mail, Menu, X } from "lucide-react";
+import { ChevronDown, CreditCard, Crown, LogOut, Mail, Menu, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuthUi } from "@/components/auth/auth-dialog";
@@ -50,6 +50,7 @@ export function FloatingNav() {
   const authUi = useAuthUi();
   const toast = useToast();
   const pathname = usePathname();
+  const router = useRouter();
   const dialog = useDialogParam();
   const scrolled = useActiveSection();
   // The scrollspy only means something on the editor page; the legal pages have no sections.
@@ -69,15 +70,6 @@ export function FloatingNav() {
       document.removeEventListener("keydown", esc);
     };
   }, [menu]);
-
-  async function manageBilling() {
-    try {
-      const { url } = await api<{ url: string }>("/api/v1/billing/portal", { method: "POST" });
-      window.location.assign(url);
-    } catch (err) {
-      toast(errorMessage(err), "error");
-    }
-  }
 
   async function resendVerification() {
     try {
@@ -154,20 +146,18 @@ export function FloatingNav() {
                     </div>
                     <div className="my-1 h-px bg-border" />
                     {isPro ? (
-                      <MenuItem onClick={() => { setMenu(false); void manageBilling(); }}>
+                      <MenuItem onClick={() => { setMenu(false); router.push("/billing"); }}>
                         <Crown className="size-4" /> Manage subscription
                       </MenuItem>
                     ) : (
-                      <MenuItem
-                        onClick={() => {
-                          setMenu(false);
-                          const el = document.getElementById("pricing");
-                          if (el) el.scrollIntoView({ behavior: "smooth" });
-                          else window.location.assign("/#pricing");
-                        }}
-                      >
-                        <Crown className="size-4 text-amber-500" /> Upgrade to Pro
-                      </MenuItem>
+                      <>
+                        <MenuItem onClick={() => { setMenu(false); router.push("/checkout"); }}>
+                          <Crown className="size-4 text-amber-500" /> Upgrade to Pro
+                        </MenuItem>
+                        <MenuItem onClick={() => { setMenu(false); router.push("/billing"); }}>
+                          <CreditCard className="size-4" /> Billing &amp; receipts
+                        </MenuItem>
+                      </>
                     )}
                     {!user.emailVerified && (
                       <MenuItem onClick={() => { setMenu(false); void resendVerification(); }}>

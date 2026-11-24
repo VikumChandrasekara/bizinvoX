@@ -150,7 +150,7 @@ async fn on_checkout_completed(state: &AppState, session: &Value) -> AppResult<(
 /// Map a Stripe subscription onto `users.plan`. `past_due` keeps Pro during
 /// Stripe's retry (grace) period; it drops to Free once Stripe gives up.
 /// Downgrades never delete templates or invoices.
-async fn sync_subscription(state: &AppState, sub: &Value) -> AppResult<()> {
+pub(crate) async fn sync_subscription(state: &AppState, sub: &Value) -> AppResult<()> {
     let Some(customer) = sub["customer"].as_str() else {
         return Ok(());
     };
@@ -160,28 +160,65 @@ async fn sync_subscription(state: &AppState, sub: &Value) -> AppResult<()> {
     } else {
         Plan::Free
     };
+    let item = &sub["items"]["data"][0];
+    let ts = |t: Option<i64>| t.and_then(|t| DateTime::from_timestamp(t, 0));
     // Newer API versions moved current_period_end onto subscription items.
-    let period_end = sub["current_period_end"]
+    let period_end = ts(sub["current_period_end"]
         .as_i64()
-        .or_else(|| sub["items"]["data"][0]["current_period_end"].as_i64())
-        .and_then(|t| DateTime::from_timestamp(t, 0));
+        .or_else(|| item["current_period_end"].as_i64()));
+    // A subscription set to stop is flagged either way (the period flag, or a `cancel_at` date,
+    // which the Stripe portal and newer API versions use). Pro lasts until that moment.
+    let cancel_at = ts(sub["cancel_at"].as_i64());
+    let cancelling = sub["cancel_at_period_end"].as_bool().unwrap_or(false) || cancel_at.is_some();
+    let ends_at = if cancelling {
+        cancel_at.or(period_end)
+    } else {
+        period_end
+    };
+    let interval = match item["price"]["recurring"]["interval"]
+        .as_str()
+        .or_else(|| sub["plan"]["interval"].as_str())
+    {
+        Some("year") => Some("annual"),
+        Some("month") => Some("monthly"),
+        _ => None,
+    };
+    let amount = item["price"]["unit_amount"]
+        .as_i64()
+        .or_else(|| sub["plan"]["amount"].as_i64())
+        .map(|a| a.clamp(0, i32::MAX as i64) as i32);
+    let currency = sub["currency"].as_str().map(str::to_ascii_uppercase);
+    let started = ts(sub["start_date"].as_i64());
     let meta_user = sub["metadata"]["user_id"]
         .as_str()
         .and_then(|s| Uuid::parse_str(s).ok());
 
+    // Plan details only mean something while Pro; a lapsed subscription clears them.
     let updated = sqlx::query(
         "UPDATE users SET plan = $1,
                 plan_renews_at = CASE WHEN $1 = 'pro'::user_plan THEN $2 ELSE NULL END,
                 stripe_subscription_id = $3,
                 stripe_customer_id = COALESCE(stripe_customer_id, $4),
+                subscription_status = $6::text,
+                plan_interval = CASE WHEN $1 = 'pro'::user_plan THEN $7::text ELSE NULL END,
+                plan_amount_cents = CASE WHEN $1 = 'pro'::user_plan THEN $8::int ELSE NULL END,
+                plan_currency = CASE WHEN $1 = 'pro'::user_plan THEN $9::text ELSE NULL END,
+                cancel_at_period_end = ($1 = 'pro'::user_plan AND $10::bool),
+                subscribed_at = CASE WHEN $1 = 'pro'::user_plan THEN COALESCE($11::timestamptz, subscribed_at) ELSE NULL END,
                 updated_at = now()
           WHERE stripe_customer_id = $4 OR ($5::uuid IS NOT NULL AND id = $5)",
     )
     .bind(plan)
-    .bind(period_end)
+    .bind(ends_at)
     .bind(sub["id"].as_str())
     .bind(customer)
     .bind(meta_user)
+    .bind(status)
+    .bind(interval)
+    .bind(amount)
+    .bind(currency)
+    .bind(cancelling)
+    .bind(started)
     .execute(&state.db)
     .await?
     .rows_affected();
@@ -204,15 +241,17 @@ async fn record_subscription_payment(state: &AppState, invoice: &Value) -> AppRe
         .unwrap_or("usd")
         .to_ascii_uppercase();
     sqlx::query(
-        "INSERT INTO payments (user_id, stripe_invoice_id, stripe_payment_intent_id, kind, amount_cents, currency, status)
-         SELECT id, $1, $2, 'pro_subscription', $3, $4, 'succeeded' FROM users WHERE stripe_customer_id = $5
-         ON CONFLICT (stripe_invoice_id) WHERE stripe_invoice_id IS NOT NULL DO NOTHING",
+        "INSERT INTO payments (user_id, stripe_invoice_id, stripe_payment_intent_id, kind, amount_cents, currency, status, receipt_url)
+         SELECT id, $1, $2, 'pro_subscription', $3, $4, 'succeeded', $6 FROM users WHERE stripe_customer_id = $5
+         ON CONFLICT (stripe_invoice_id) WHERE stripe_invoice_id IS NOT NULL
+         DO UPDATE SET receipt_url = COALESCE(EXCLUDED.receipt_url, payments.receipt_url)",
     )
     .bind(stripe_invoice)
     .bind(invoice["payment_intent"].as_str())
     .bind(amount)
     .bind(currency)
     .bind(customer)
+    .bind(invoice["hosted_invoice_url"].as_str())
     .execute(&state.db)
     .await?;
     Ok(())

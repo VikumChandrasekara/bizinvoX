@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Crown, Download, Loader2, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -90,9 +91,9 @@ export function PaywallDialog({ open, onOpenChange, ensureSaved, onDownloadFree 
             Invoicing regularly? <strong className="text-foreground">Pro</strong> removes the watermark from every invoice and adds all templates, from {monthly}/mo.
           </p>
           <Button asChild variant="link" size="sm" className="px-0">
-            <a href="#pricing" onClick={() => onOpenChange(false)}>
+            <Link href="/checkout?plan=annual" onClick={() => onOpenChange(false)}>
               Upgrade
-            </a>
+            </Link>
           </Button>
         </div>
       </DialogContent>

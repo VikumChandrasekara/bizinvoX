@@ -221,6 +221,60 @@ impl Stripe {
         self.get(&format!("/subscriptions/{subscription_id}")).await
     }
 
+    /// Whether a Stripe secret key is set (payments work at all).
+    pub fn is_configured(&self) -> bool {
+        self.secret_key.is_some()
+    }
+
+    /// Stop (or undo stopping) the renewal at the end of the paid period. The customer keeps
+    /// Pro until then. Resuming also clears a `cancel_at` date set from the Stripe portal.
+    pub async fn set_cancel_at_period_end(
+        &self,
+        subscription_id: &str,
+        cancel: bool,
+    ) -> Result<Value, AppError> {
+        if !is_stripe_id(subscription_id, "sub_") {
+            return Err(AppError::bad_request("Invalid subscription id."));
+        }
+        let mut form: Vec<(&str, String)> = vec![("cancel_at_period_end", cancel.to_string())];
+        if !cancel {
+            form.push(("cancel_at", String::new()));
+        }
+        self.post(&format!("/subscriptions/{subscription_id}"), &form, None)
+            .await
+    }
+
+    /// The card that pays for the subscription (`brand`, `last4`, `exp_month`, `exp_year`), or
+    /// None. Best effort: the page still works when Stripe can't be reached.
+    pub async fn default_card(
+        &self,
+        customer_id: &str,
+        subscription_id: Option<&str>,
+    ) -> Option<Value> {
+        if let Some(sub) = subscription_id.filter(|s| is_stripe_id(s, "sub_")) {
+            let v = self
+                .get(&format!(
+                    "/subscriptions/{sub}?expand[]=default_payment_method"
+                ))
+                .await
+                .ok()?;
+            if v["default_payment_method"]["card"].is_object() {
+                return Some(v["default_payment_method"]["card"].clone());
+            }
+        }
+        if !is_stripe_id(customer_id, "cus_") {
+            return None;
+        }
+        let v = self
+            .get(&format!(
+                "/customers/{customer_id}?expand[]=invoice_settings.default_payment_method"
+            ))
+            .await
+            .ok()?;
+        let card = &v["invoice_settings"]["default_payment_method"]["card"];
+        card.is_object().then(|| card.clone())
+    }
+
     pub async fn refund(
         &self,
         payment_intent: &str,

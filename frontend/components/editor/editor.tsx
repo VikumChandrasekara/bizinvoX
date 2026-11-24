@@ -938,13 +938,27 @@ export function Editor() {
     }
   }
 
-  /** A fresh, completely empty sheet. The invoice being left is already saved (this browser's My Invoices, or the account),
-   *  so nothing is lost. Only the design (template, colours, logo) carries over. */
+  /** A fresh, completely clean sheet: no data, no logo, and the plain default look. The invoice being left is already saved
+   *  (this browser's My Invoices, or the account), so nothing is lost. A look worth keeping is a saved template: start from
+   *  one in Templates > My templates. */
   function startNew() {
     if (previewOnly) return;
     const d = newDraft();
-    d.templateId = draft.templateId;
+    draftRef.current = d;
     setDraft(d);
+    layoutRef.current = DEFAULT_LAYOUT;
+    setLayout(DEFAULT_LAYOUT);
+    setDesignKey("classic");
+    designKeyRef.current = "classic";
+    classicBackup.current = null;
+    // The working template (Pro) and the logo stay with the invoice that was left; this one starts with neither.
+    hydratedFor.current = null;
+    dirtyDesign.current = false;
+    if (logoRef.current?.src.startsWith("blob:")) URL.revokeObjectURL(logoRef.current.src);
+    logoRef.current = null;
+    setLogo(null);
+    logoOnServer.current = null;
+    linkTemplate(null);
     clearHistory();
     idRef.current = null;
     localIdRef.current = newLocalId();
@@ -1228,7 +1242,7 @@ export function Editor() {
           <DialogHeader>
             <DialogTitle>Start a new invoice?</DialogTitle>
             <DialogDescription>
-              This clears every field and opens a blank invoice. The invoice you&apos;re on now stays saved in{" "}
+              This opens a clean invoice: every field, your logo and the styling are reset. The invoice you&apos;re on now stays saved in{" "}
               <Link href="/invoices" className="font-medium text-primary underline-offset-4 hover:underline">
                 My Invoices
               </Link>

@@ -1,54 +1,27 @@
 "use client";
 
-import { Check, Crown, Loader2, Minus } from "lucide-react";
+import { Check, Crown, Minus } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuthUi } from "@/components/auth/auth-dialog";
 import type { Pricing } from "@/components/invoice/paywall-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { api, errorMessage } from "@/lib/api";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { FALLBACK_PRICING, PRO_FEATURES, type Interval } from "@/lib/billing";
 import { cn, formatCents } from "@/lib/utils";
-
-const FALLBACK: Pricing = { downloadPriceCents: 99, currency: "USD", proMonthlyCents: 599, proAnnualCents: 5247 };
 
 export function PricingCards() {
   const { user, isPro } = useAuth();
   const authUi = useAuthUi();
-  const [pricing, setPricing] = useState<Pricing>(FALLBACK);
-  const [interval, setInterval] = useState<"monthly" | "annual">("annual");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pricing, setPricing] = useState<Pricing>(FALLBACK_PRICING);
+  const [interval, setInterval] = useState<Interval>("annual");
 
   useEffect(() => {
     api<Pricing>("/api/v1/pricing").then(setPricing).catch(() => undefined);
   }, []);
-
-  async function upgrade() {
-    if (!user) return authUi.open("signup");
-    setBusy(true);
-    setError(null);
-    try {
-      const { url } = await api<{ url: string }>("/api/v1/billing/subscribe", { method: "POST", json: { interval } });
-      window.location.assign(url);
-    } catch (err) {
-      setError(errorMessage(err));
-      setBusy(false);
-    }
-  }
-
-  async function manage() {
-    setBusy(true);
-    setError(null);
-    try {
-      const { url } = await api<{ url: string }>("/api/v1/billing/portal", { method: "POST" });
-      window.location.assign(url);
-    } catch (err) {
-      setError(errorMessage(err));
-      setBusy(false);
-    }
-  }
 
   const cur = pricing.currency;
   const proPrice = interval === "annual" ? formatCents(Math.round(pricing.proAnnualCents / 12), cur) : formatCents(pricing.proMonthlyCents, cur);
@@ -103,23 +76,18 @@ export function PricingCards() {
           sub={interval === "annual" ? `per month, billed ${formatCents(pricing.proAnnualCents, cur)} yearly` : "per month"}
           cta={
             isPro ? (
-              <Button className="w-full" onClick={manage} disabled={busy}>
-                {busy && <Loader2 className="animate-spin" />} Manage subscription
-              </Button>
+              <Link href="/billing" className={cn(buttonVariants(), "w-full")}>
+                Manage subscription
+              </Link>
             ) : (
-              <Button className="w-full" onClick={upgrade} disabled={busy}>
-                {busy ? <Loader2 className="animate-spin" /> : <Crown />} Upgrade to Pro
-              </Button>
+              <Link href={`/checkout?plan=${interval}`} className={cn(buttonVariants(), "w-full")}>
+                <Crown /> Upgrade to Pro
+              </Link>
             )
           }
-          features={[["Unlimited downloads, never a watermark", true], ["All five templates, in your PDF", true], ["Save your own templates and logo", true], ["No branding footer", true], ["Search, filters & CSV export", true]]}
+          features={PRO_FEATURES.map((f) => [f, true] as [string, boolean])}
         />
       </div>
-      {error && (
-        <p role="alert" className="mt-4 text-center text-sm text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

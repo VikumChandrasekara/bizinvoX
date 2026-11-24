@@ -109,7 +109,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/invoices/:id/download", post(payments::download))
         // billing
+        .route("/billing/subscription", get(billing::subscription))
         .route("/billing/subscribe", post(billing::subscribe))
+        .route("/billing/confirm", post(billing::confirm))
+        .route("/billing/cancel", post(billing::cancel))
+        .route("/billing/resume", post(billing::resume))
         .route("/billing/portal", post(billing::portal))
         // webhooks
         .route("/webhooks/stripe", post(webhooks::stripe))

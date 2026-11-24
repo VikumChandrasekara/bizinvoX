@@ -300,9 +300,21 @@ function Page({ layout: l, draft, logoUrl, branding, actions }: { layout: Templa
             <Removable id="header.number" className={cn("w-fit", logoLeft && "ml-auto")} offset={-26}>
               <div className="flex items-baseline" style={{ fontSize: 10 * PT, color: subColor, marginTop: 6, opacity: 0.9 }}>
                 <span>No.&nbsp;</span>
-                <div style={{ width: 42 * MM }}>
-                  <F id="invoiceNumber" placeholder="INV-0001" align={logoLeft ? "right" : "left"} />
-                </div>
+                {logoLeft ? (
+                  // Right-aligned like the title and the PDF: the box is exactly as wide as the number, so "No." sits right next to it.
+                  <div className="relative">
+                    <span aria-hidden className="invisible block whitespace-pre pr-px">
+                      {draft.invoiceNumber || "INV-0001"}
+                    </span>
+                    <div className="absolute inset-0">
+                      <F id="invoiceNumber" placeholder="INV-0001" align="right" />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ width: 42 * MM }}>
+                    <F id="invoiceNumber" placeholder="INV-0001" align="left" />
+                  </div>
+                )}
               </div>
             </Removable>
           </div>
